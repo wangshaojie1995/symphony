@@ -14,17 +14,18 @@ This directory contains the current Elixir/OTP implementation of Symphony, based
 ## How it works
 
 1. Polls the configured tracker for candidate work (included adapters: Linear, GitHub Issues, Jira
-   Cloud, Asana, and GitLab)
+   Cloud, Asana, GitLab, and Alibaba Cloud Yunxiao Projex)
 2. Creates a workspace per issue
 3. Launches Codex in [App Server mode](https://developers.openai.com/codex/app-server/) inside the
    workspace
 4. Sends a workflow prompt to Codex
 5. Keeps Codex working on the issue until the work is done
 
-During app-server sessions, the selected tracker adapter may advertise provider-native tools. The
+During app-server sessions, the selected tracker adapter may advertise provider-native tools.
 Linear serves `linear_graphql`, GitHub Issues serves `github_api`, Jira Cloud serves
-`jira_rest`, Asana serves `asana_api`, and GitLab serves `gitlab_api`. Symphony executes those
-tools with configured host-side auth and removes declared tracker-token environment variables from
+`jira_rest`, Asana serves `asana_api`, GitLab serves `gitlab_api`, and Yunxiao serves
+`yunxiao_api`. Symphony executes those tools with configured host-side auth and removes declared
+tracker-token environment variables from
 the Codex child, so the agent does not need a second tracker login.
 
 If a claimed issue moves to a terminal state (`Done`, `Closed`, `Cancelled`, or `Duplicate`),
@@ -292,6 +293,43 @@ codex:
 - Symphony reads project issues by IID and exposes route-safe `GL-<iid>` identifiers.
 - `gitlab_api` forwards raw GitLab REST requests with host-side auth and keeps configured tracker
   credentials and provider authentication aliases out of the Codex child.
+
+### Alibaba Cloud Yunxiao Projex adapter
+
+Set `ALIBABA_CLOUD_YUNXIAO_ACCESS_TOKEN` to a Yunxiao personal access token. Add the
+following tracker configuration to your `WORKFLOW.md` front matter.
+
+```yaml
+tracker:
+  kind: yunxiao
+  provider:
+    organization_id: "your-organization-id"
+    project_id: "your-project-id"
+    categories: "Req,Bug,Task"
+  active_states: ["100005", "100010"]
+  terminal_states: ["100015"]
+  required_labels: ["symphony"]
+```
+
+- Replace the state examples with your project's Projex status IDs. Symphony uses the API's
+  `status.id` for state and `serialNumber` for the display identifier. Remove
+  `required_labels` if you want all matching work items to be eligible.
+- Central edition defaults to `https://openapi-rdc.aliyuncs.com` and requires
+  `organization_id`. For Region edition, set `provider.api_url` to the instance's HTTPS
+  origin and omit `organization_id`. To use a different token environment variable, set
+  `provider.api_key` to `$YOUR_VARIABLE`.
+- Polling and refresh are scoped to the project. Archived work items are ineligible, and
+  deleted or moved work items are omitted on ID refresh. Searches are subject to Projex's
+  10,000-result pagination window.
+- Give the token read permission for Projex work items. If your workflow changes states or adds
+  comments, grant the corresponding write permissions. Codex can call `yunxiao_api` with
+  `operation` and the internal work-item `id` (`{{ issue.id }}` in the workflow prompt).
+  Supported operations are `get_workitem`, `get_workflow`, `update_status` (requires
+  `status_id`), and `add_comment` (requires Markdown `content`). Symphony sends the
+  token from the host and removes its configured environment variables from the Codex child.
+
+See the official [service endpoints](https://help.aliyun.com/zh/yunxiao/developer-reference/service-access-point-domain)
+and [SearchWorkitems API](https://help.aliyun.com/zh/yunxiao/developer-reference/searchworkitems).
 
 ## Web dashboard
 
