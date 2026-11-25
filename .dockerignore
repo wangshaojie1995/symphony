@@ -1,0 +1,12 @@
+**
+!elixir/
+!elixir/mix.exs
+!elixir/mix.lock
+!elixir/config/
+!elixir/config/**
+!elixir/lib/
+!elixir/lib/**
+!elixir/priv/
+!elixir/priv/static/
+!elixir/priv/static/dashboard.css
+!elixir/priv/static/favicon.png

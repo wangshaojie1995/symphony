@@ -75,6 +75,56 @@ mise exec -- mix build
 mise exec -- ./bin/symphony ./WORKFLOW.md
 ```
 
+## Deploy with Docker Compose
+
+With Docker Engine and Docker Compose installed, copy the templates from the repository root.
+
+```bash
+cp .env.example .env
+mkdir -p docker/config
+cp docker/WORKFLOW.md.example docker/config/WORKFLOW.md
+sudo install -d -m 700 -o 10001 -g 10001 data/workspaces data/logs data/codex
+```
+
+1. Set `LINEAR_API_KEY` and `SOURCE_REPO_URL` in `.env`. Use a clone URL the container can
+   access. For a private repository, supply Git credentials to the container through your
+   deployment's credential mechanism.
+2. Set the Linear project slug and match the active and terminal states to your board in
+   `docker/config/WORKFLOW.md`. Keep the workflow readable by the container user (UID 10001).
+   Keep `workspace.root` at `$SYMPHONY_WORKSPACE_ROOT` to use the mounted workspace directory and keep
+   `server.host` at `0.0.0.0` to accept Docker's port forwarding.
+3. Read the [project's engineering preview notice](../README.md) and set
+   `SYMPHONY_ACKNOWLEDGEMENT` in `.env` to
+   `--i-understand-that-this-will-be-running-without-the-usual-guardrails` to acknowledge it.
+
+Build the image and check that Bubblewrap can create the namespaces required by Codex under
+the Docker host and container security profiles.
+
+```bash
+docker compose build
+docker compose run --rm -T --entrypoint codex symphony sandbox linux -- /bin/true
+```
+
+If this reports a namespace permission error, use a container security profile that permits
+Bubblewrap, or run Codex on a separate host using the
+[SSH worker configuration](../SPEC.md#appendix-a-ssh-worker-extension-optional).
+
+Sign in to Codex from the container so Symphony can reuse that login when it starts.
+
+```bash
+docker compose run --rm --entrypoint codex symphony login --device-auth
+docker compose up -d --wait
+docker compose logs -f symphony
+```
+
+For API-key authentication, pipe the key from your environment to
+`docker compose run --rm -T --entrypoint codex symphony login --with-api-key`.
+
+The dashboard is available at <http://127.0.0.1:4000>. Change `SYMPHONY_PORT` in `.env` to
+use a different host port. Compose bind mounts `./data/workspaces`, `./data/logs`, and
+`./data/codex` so the data stays in the checkout across container recreation. Docker rotates
+the container's stdout and stderr logs at 10 MB and keeps up to three files.
+
 ## Burrito releases
 
 Symphony ships self-contained executables built with
